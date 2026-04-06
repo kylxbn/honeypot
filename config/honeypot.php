@@ -31,6 +31,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | MaxMind GeoLite2 Database
+    |--------------------------------------------------------------------------
+    | Download GeoLite2-Country.mmdb from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+    | (free account required) and place it at the path below.
+    | Country lookup is silently skipped if the file is missing.
+    */
+    'geoip_db_path' => env('GEOIP_DB_PATH', storage_path('app/GeoLite2-Country.mmdb')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Logging Options
     |--------------------------------------------------------------------------
     */

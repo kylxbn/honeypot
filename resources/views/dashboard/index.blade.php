@@ -81,6 +81,58 @@
   </div>
 </div>
 
+{{-- Top countries + Canary alerts --}}
+<div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+
+  {{-- Top countries --}}
+  <div class="bg-slate-800 rounded-xl border border-slate-700 p-4">
+    <h3 class="text-sm font-semibold text-slate-300 mb-3">🌍 Top Countries</h3>
+    @if($topCountries->count())
+      @php $maxC = $topCountries->max('count') ?: 1; @endphp
+      <div class="space-y-2">
+        @foreach($topCountries as $c)
+        <div>
+          <div class="flex justify-between text-xs text-slate-400 mb-1">
+            <span>{{ $c->country_name ?? 'Unknown' }} @if($c->country_code)<span class="text-slate-600">({{ $c->country_code }})</span>@endif</span>
+            <span class="font-mono text-slate-300">{{ number_format($c->count) }}</span>
+          </div>
+          <div class="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div class="h-full bg-blue-500 rounded-full" style="width:{{ round($c->count/$maxC*100) }}%"></div>
+          </div>
+        </div>
+        @endforeach
+      </div>
+    @else
+      <p class="text-slate-600 text-sm">No country data yet — add GeoLite2-Country.mmdb to storage/app/.</p>
+    @endif
+  </div>
+
+  {{-- Recent canary triggers --}}
+  <div class="bg-slate-800 rounded-xl border {{ $recentCanaryTriggers->count() ? 'border-green-800' : 'border-slate-700' }} p-4">
+    <h3 class="text-sm font-semibold {{ $recentCanaryTriggers->count() ? 'text-green-400' : 'text-slate-300' }} mb-3">
+      🐤 Canary Triggers @if($recentCanaryTriggers->count())<span class="text-xs text-green-500 ml-1">— ACTIVE</span>@endif
+    </h3>
+    @forelse($recentCanaryTriggers as $t)
+    <div class="mb-3 pb-3 border-b border-slate-700 last:border-0 last:mb-0 last:pb-0">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-xs font-semibold text-green-400">{{ $t->token->label }}</span>
+        <span class="text-xs text-slate-500">{{ $t->created_at->diffForHumans() }}</span>
+      </div>
+      <div class="text-xs text-slate-400">
+        <span class="font-mono text-orange-400">{{ $t->ip_address }}</span>
+        @if($t->country_name) <span class="text-slate-600">· {{ $t->country_name }}</span> @endif
+      </div>
+    </div>
+    @empty
+    <p class="text-slate-600 text-sm">No canaries triggered yet. Run <code class="text-slate-400">artisan honeypot:generate-canaries</code> to activate.</p>
+    @endforelse
+    @if($recentCanaryTriggers->count())
+    <div class="mt-3"><a href="{{ $base }}/canaries" class="text-xs text-slate-400 hover:text-white">View all canary activity →</a></div>
+    @endif
+  </div>
+
+</div>
+
 {{-- Recent credentials --}}
 @if($recentCredentials->count())
 <div class="bg-slate-800 rounded-xl border border-red-900 p-4 mb-6">
@@ -99,7 +151,7 @@
         <tr class="hover:bg-slate-700/50">
           <td class="py-1.5 text-slate-500 whitespace-nowrap">{{ $c->created_at->diffForHumans() }}</td>
           <td class="py-1.5 font-mono text-orange-400">{{ $c->ip_address }}</td>
-          <td class="py-1.5 text-slate-400 truncate max-w-[180px]">{{ $c->trap_url }}</td>
+          <td class="py-1.5 text-slate-400 truncate max-w-45">{{ $c->trap_url }}</td>
           <td class="py-1.5 text-yellow-400 font-mono">{{ $c->username ?? '—' }}</td>
           <td class="py-1.5 text-red-400 font-mono">{{ $c->password ?? '—' }}</td>
         </tr>
@@ -134,7 +186,7 @@
           <td class="py-1.5">
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold {{ $r->method==='GET'?'bg-blue-800 text-blue-200':($r->method==='POST'?'bg-green-800 text-green-200':'bg-slate-600 text-slate-200') }}">{{ $r->method }}</span>
           </td>
-          <td class="py-1.5 font-mono text-slate-300 truncate max-w-[200px]">
+          <td class="py-1.5 font-mono text-slate-300 truncate max-w-50">
             <a href="{{ $base }}/request/{{ $r->id }}" class="hover:text-white">{{ $r->path }}</a>
           </td>
           <td class="py-1.5 text-slate-400">{{ $r->trap_type }}</td>

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CanaryToken;
+use App\Models\CanaryTrigger;
 use App\Models\HoneypotCredential;
 use App\Models\HoneypotRequest;
 use Illuminate\Http\Request;
@@ -72,6 +74,15 @@ class DashboardController extends Controller
             'count' => $dailyData->get(now()->subDays($d)->format('Y-m-d'))?->count ?? 0,
         ]);
 
+        $topCountries = HoneypotRequest::select('country_code', 'country_name', DB::raw('COUNT(*) as count'))
+            ->whereNotNull('country_code')
+            ->groupBy('country_code', 'country_name')
+            ->orderByDesc('count')
+            ->limit(10)
+            ->get();
+
+        $recentCanaryTriggers = CanaryTrigger::with('token')->latest()->limit(5)->get();
+
         $recentRequests    = HoneypotRequest::latest()->limit(25)->get();
         $recentCredentials = HoneypotCredential::with('request')->latest()->limit(10)->get();
 
@@ -80,6 +91,7 @@ class DashboardController extends Controller
             'credentialsCaptured', 'flaggedCount',
             'topTraps', 'topIps', 'topUserAgents',
             'hourlyData', 'last30Days',
+            'topCountries', 'recentCanaryTriggers',
             'recentRequests', 'recentCredentials'
         ));
     }
@@ -122,6 +134,13 @@ class DashboardController extends Controller
             ->withQueryString();
 
         return view('dashboard.credentials', compact('credentials'));
+    }
+
+    public function canaries()
+    {
+        $tokens   = CanaryToken::withCount('triggers')->orderByDesc('last_triggered_at')->get();
+        $triggers = CanaryTrigger::with('token')->latest()->paginate(50);
+        return view('dashboard.canaries', compact('tokens', 'triggers'));
     }
 
     public function showRequest(int $id)

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\HoneypotRequest;
 use Closure;
+use GeoIp2\Database\Reader as GeoReader;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
@@ -12,10 +13,10 @@ class LogHoneypotRequest
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $path = $request->path();
+        $path     = $request->path();
         $fullPath = '/' . $path;
 
-        // Skip dashboard and internal paths
+        // Skip dashboard and other internal paths
         $skipPaths = array_merge(
             config('honeypot.skip_paths', []),
             [config('honeypot.dashboard_path')]
@@ -42,8 +43,12 @@ class LogHoneypotRequest
                 $body = json_encode($request->except(['_token']));
             }
 
+            [$countryCode, $countryName] = self::geolocate($request->ip());
+
             $honeypotRequest = HoneypotRequest::create([
                 'ip_address'   => $request->ip(),
+                'country_code' => $countryCode,
+                'country_name' => $countryName,
                 'method'       => $request->method(),
                 'url'          => $request->fullUrl(),
                 'path'         => $fullPath,
@@ -56,13 +61,33 @@ class LogHoneypotRequest
                 'is_flagged'   => false,
             ]);
 
-            // Store the DB record ID in the request so controllers can attach credentials to it
             $request->attributes->set('honeypot_request_id', $honeypotRequest->id);
         } catch (Throwable) {
             // Never let logging break the response
         }
 
         return $next($request);
+    }
+
+    /**
+     * Returns [countryCode, countryName] or [null, null] if lookup fails
+     * (missing DB file, private IP, etc.).
+     */
+    public static function geolocate(string $ip): array
+    {
+        try {
+            $dbPath = config('honeypot.geoip_db_path');
+            if (!$dbPath || !file_exists($dbPath)) {
+                return [null, null];
+            }
+            $record = (new GeoReader($dbPath))->country($ip);
+            return [
+                $record->country->isoCode,
+                $record->country->name,
+            ];
+        } catch (Throwable) {
+            return [null, null];
+        }
     }
 
     public static function detectTrapType(string $path): string
@@ -74,49 +99,49 @@ class LogHoneypotRequest
         }
 
         $patterns = [
-            'wp-login'        => 'wp-login',
-            'wp-admin'        => 'wp-admin',
-            'xmlrpc'          => 'wp-xmlrpc',
-            'wp-config'       => 'wp-config',
-            '.env'            => 'env-file',
-            '.git'            => 'git-exposure',
-            '.htpasswd'       => 'htpasswd',
-            '.htaccess'       => 'htaccess',
-            'web.config'      => 'iis-config',
-            'phpmyadmin'      => 'phpmyadmin',
-            '/pma'            => 'phpmyadmin',
-            'phpinfo'         => 'phpinfo',
-            'server-status'   => 'server-status',
-            'server-info'     => 'server-status',
-            '/admin'          => 'admin-panel',
-            '/administrator'  => 'admin-panel',
-            '/login'          => 'admin-panel',
-            'shell.php'       => 'webshell',
-            'c99.php'         => 'webshell',
-            'r57.php'         => 'webshell',
-            'b374k'           => 'webshell',
-            'wso.php'         => 'webshell',
-            'cmd.php'         => 'webshell',
-            '/uploads/'       => 'webshell',
-            '/shell'          => 'webshell',
-            'backup'          => 'backup-file',
-            '.sql'            => 'backup-file',
-            'dump'            => 'backup-file',
-            '/api/'           => 'api-probe',
-            'config.php'      => 'config-exposure',
-            'configuration'   => 'config-exposure',
-            'settings.php'    => 'config-exposure',
-            'id_rsa'          => 'ssh-key',
-            '.ssh'            => 'ssh-key',
-            '/passwd'         => 'os-exposure',
-            '/etc/'           => 'os-exposure',
-            'elmah'           => 'dotnet-probe',
-            'trace.axd'       => 'dotnet-probe',
-            'web.config'      => 'iis-config',
-            'robots.txt'      => 'robots',
-            'sitemap'         => 'sitemap',
-            'crossdomain'     => 'crossdomain',
-            'clientaccess'    => 'crossdomain',
+            'wp-login'       => 'wp-login',
+            'wp-admin'       => 'wp-admin',
+            'xmlrpc'         => 'wp-xmlrpc',
+            'wp-config'      => 'wp-config',
+            '.env'           => 'env-file',
+            '.git'           => 'git-exposure',
+            '.htpasswd'      => 'htpasswd',
+            '.htaccess'      => 'htaccess',
+            'web.config'     => 'iis-config',
+            'phpmyadmin'     => 'phpmyadmin',
+            '/pma'           => 'phpmyadmin',
+            'phpinfo'        => 'phpinfo',
+            'server-status'  => 'server-status',
+            'server-info'    => 'server-status',
+            '/admin'         => 'admin-panel',
+            '/administrator' => 'admin-panel',
+            '/login'         => 'admin-panel',
+            'shell.php'      => 'webshell',
+            'c99.php'        => 'webshell',
+            'r57.php'        => 'webshell',
+            'b374k'          => 'webshell',
+            'wso.php'        => 'webshell',
+            'cmd.php'        => 'webshell',
+            '/uploads/'      => 'webshell',
+            '/shell'         => 'webshell',
+            'backup'         => 'backup-file',
+            '.sql'           => 'backup-file',
+            'dump'           => 'backup-file',
+            '/api/'          => 'api-probe',
+            'config.php'     => 'config-exposure',
+            'configuration'  => 'config-exposure',
+            'settings.php'   => 'config-exposure',
+            'id_rsa'         => 'ssh-key',
+            '.ssh'           => 'ssh-key',
+            '/passwd'        => 'os-exposure',
+            '/etc/'          => 'os-exposure',
+            'elmah'          => 'dotnet-probe',
+            'trace.axd'      => 'dotnet-probe',
+            'robots.txt'     => 'robots',
+            'sitemap'        => 'sitemap',
+            'crossdomain'    => 'crossdomain',
+            'clientaccess'   => 'crossdomain',
+            '/canary/'       => 'canary',
         ];
 
         foreach ($patterns as $needle => $type) {

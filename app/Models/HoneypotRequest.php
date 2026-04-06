@@ -9,6 +9,8 @@ class HoneypotRequest extends Model
 {
     protected $fillable = [
         'ip_address',
+        'country_code',
+        'country_name',
         'method',
         'url',
         'path',

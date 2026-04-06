@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CanaryToken;
 use App\Models\HoneypotCredential;
 use App\Models\HoneypotRequest;
 use Faker\Factory as Faker;
@@ -58,6 +59,20 @@ class HoneypotController extends Controller
     }
 
     // -------------------------------------------------------------------------
+    // Canary token helper
+    // -------------------------------------------------------------------------
+
+    private function canaryUrl(string $trapSource, string $fallback = 'https://novatech-solutions.com'): string
+    {
+        try {
+            $token = CanaryToken::where('trap_source', $trapSource)->first();
+            return $token ? $token->url() : $fallback;
+        } catch (\Throwable) {
+            return $fallback;
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Fake user data (deterministic via seeded Faker)
     // -------------------------------------------------------------------------
 
@@ -66,6 +81,9 @@ class HoneypotController extends Controller
         $faker = Faker::create();
         $faker->seed(54321);
         $users = [];
+        $apiCanaryUrl = $this->canaryUrl('api-avatar');
+        $sqlCanaryUrl = $this->canaryUrl('sql-dump-avatar');
+
         for ($i = 1; $i <= 20; $i++) {
             $plainPass = $faker->password(8, 12);
             $users[] = [
@@ -81,6 +99,9 @@ class HoneypotController extends Controller
                 'is_active'    => $faker->boolean(90),
                 'last_login'   => $faker->dateTimeBetween('-30 days', 'now')->format('Y-m-d H:i:s'),
                 'created_at'   => $faker->dateTimeBetween('-2 years', '-6 months')->format('Y-m-d H:i:s'),
+                // Canary: if someone fetches this avatar URL, we know they processed the data
+                'avatar_url'   => ($i === 1 ? $apiCanaryUrl : "https://cdn.novatech-solutions.com/avatars/{$i}.jpg"),
+                'avatar_url_sql' => ($i === 1 ? $sqlCanaryUrl : "https://cdn.novatech-solutions.com/avatars/{$i}.jpg"),
             ];
         }
         return $users;
@@ -249,12 +270,16 @@ class HoneypotController extends Controller
 
     private function fakeEnvContent(): string
     {
-        return <<<'ENV'
+        $appUrlCanary     = $this->canaryUrl('env-app-url',  'https://novatech-solutions.com');
+        $webhookCanary    = $this->canaryUrl('env-webhook',  'https://hooks.novatech-solutions.com/notify');
+        $awsCanary        = $this->canaryUrl('aws-key-test', 'https://s3.novatech-solutions.com/health');
+
+        return <<<ENV
 APP_NAME="NovaTech Solutions"
 APP_ENV=production
 APP_KEY=base64:kN4YkW+RZpLo8QmJxT2vHiUcWdEsF9nM3aBbCeGhIjY=
 APP_DEBUG=true
-APP_URL=https://novatech-solutions.com
+APP_URL={$appUrlCanary}
 
 LOG_CHANNEL=stack
 LOG_LEVEL=debug
@@ -281,6 +306,7 @@ AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 AWS_DEFAULT_REGION=us-east-1
 AWS_BUCKET=novatech-prod-storage-2024
+AWS_ENDPOINT={$awsCanary}
 
 STRIPE_KEY=pk_live_51NkOmKAbCdEfGhIjKlMnOpQrStUvWxYz12345678
 STRIPE_SECRET=sk_live_51NkOmKAbCdEfGhIjKlMnOpQrStUvWxYz87654321
@@ -288,6 +314,8 @@ STRIPE_SECRET=sk_live_51NkOmKAbCdEfGhIjKlMnOpQrStUvWxYz87654321
 OPENAI_API_KEY=sk-proj-FakeKeyForHoneypot1234567890abcdefghij
 
 JWT_SECRET=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.honeypot.fakekey
+
+WEBHOOK_SECRET_URL={$webhookCanary}
 
 ADMIN_EMAIL=admin@novatech-internal.com
 ADMIN_PASSWORD=N0v@T3ch4dm1n!2024
@@ -412,17 +440,24 @@ ENV;
         $sql .= "-- Server version\t8.0.36\n-- Date: " . now()->format('Y-m-d H:i:s') . "\n";
         $sql .= "-- Database: novatech_prod\n\n";
         $sql .= "/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;\n\n";
+        $logoCanary = $this->canaryUrl('backup-sql-logo', 'https://cdn.novatech-solutions.com/logo.png');
+
+        $sql .= "-- Table structure for table `settings`\n\n";
+        $sql .= "CREATE TABLE `settings` (`key` varchar(100) PRIMARY KEY, `value` text) ENGINE=InnoDB;\n";
+        $sql .= "INSERT INTO `settings` VALUES ('company_logo_url','{$logoCanary}'),('app_version','3.4.1'),('maintenance_mode','0');\n\n";
+
         $sql .= "-- Table structure for table `users`\n\n";
         $sql .= "DROP TABLE IF EXISTS `users`;\n";
-        $sql .= "CREATE TABLE `users` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `username` varchar(255) NOT NULL,\n  `email` varchar(255) NOT NULL,\n  `password` varchar(255) NOT NULL COMMENT 'MD5 hashed',\n  `role` enum('admin','moderator','user') DEFAULT 'user',\n  `is_active` tinyint(1) DEFAULT 1,\n  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n";
+        $sql .= "CREATE TABLE `users` (\n  `id` int NOT NULL AUTO_INCREMENT,\n  `username` varchar(255) NOT NULL,\n  `email` varchar(255) NOT NULL,\n  `password` varchar(255) NOT NULL COMMENT 'MD5 hashed',\n  `avatar_url` varchar(500) DEFAULT NULL,\n  `role` enum('admin','moderator','user') DEFAULT 'user',\n  `is_active` tinyint(1) DEFAULT 1,\n  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;\n\n";
         $sql .= "-- Dumping data for table `users`\n\nINSERT INTO `users` VALUES\n";
 
         $rows = [];
         foreach ($users as $u) {
             $rows[] = sprintf(
-                "(%d,'%s','%s','%s','%s',%d,'%s')",
+                "(%d,'%s','%s','%s','%s','%s',%d,'%s')",
                 $u['id'], addslashes($u['username']), addslashes($u['email']),
-                md5($u['password']), $u['role'], $u['is_active'] ? 1 : 0, $u['created_at']
+                md5($u['password']), addslashes($u['avatar_url_sql']),
+                $u['role'], $u['is_active'] ? 1 : 0, $u['created_at']
             );
         }
         $sql .= implode(",\n", $rows) . ";\n\n";
@@ -454,7 +489,7 @@ ENV;
 
     public function apiUsers(Request $request)
     {
-        $users = collect($this->fakeUsers())->map(fn($u) => array_except_keys($u, ['password']));
+        $users = collect($this->fakeUsers())->map(fn($u) => array_except_keys($u, ['password', 'password_md5', 'avatar_url_sql']));
 
         return response()->json([
             'status'   => 'success',
@@ -596,6 +631,37 @@ ENV;
             'novatech:x:1000:1000:NovaTech App,,,:/home/novatech:/bin/bash',
             'deploy:x:1001:1001:Deploy Bot,,,:/home/deploy:/bin/bash',
         ]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Canary token trigger
+    // -------------------------------------------------------------------------
+
+    public function canary(Request $request, string $token)
+    {
+        try {
+            $canary = CanaryToken::where('token', $token)->first();
+            if ($canary) {
+                [$countryCode, $countryName] = \App\Http\Middleware\LogHoneypotRequest::geolocate($request->ip());
+                $canary->recordTrigger(
+                    $request->ip(),
+                    $countryCode,
+                    $countryName,
+                    $request->userAgent(),
+                    $request->header('Referer'),
+                );
+                // Also flag the honeypot_request that was already logged by the middleware
+                $id = $request->attributes->get('honeypot_request_id');
+                if ($id) {
+                    \App\Models\HoneypotRequest::where('id', $id)->update(['is_flagged' => true]);
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        // Return a convincing 1×1 transparent pixel so the caller gets a valid image response
+        $pixel = base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+        return response($pixel, 200)->header('Content-Type', 'image/gif');
     }
 
     // -------------------------------------------------------------------------

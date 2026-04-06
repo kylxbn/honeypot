@@ -42,6 +42,9 @@
     <a href="{{ $base }}/requests?trap=env-file" class="flex items-center gap-2 px-3 py-2 rounded-lg text-yellow-400 hover:bg-slate-700 hover:text-yellow-300">
       🔓 .env Hits
     </a>
+    <a href="{{ $base }}/canaries" class="flex items-center gap-2 px-3 py-2 rounded-lg text-green-400 hover:bg-slate-700 hover:text-green-300">
+      🐤 Canaries
+    </a>
   </nav>
   <div class="p-4 border-t border-slate-700 text-xs text-slate-600">
     🕐 {{ now()->format('H:i') }} server time

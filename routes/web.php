@@ -13,6 +13,7 @@ Route::get($dash,                    [DashboardController::class, 'index'])->nam
 Route::get($dash . '/requests',      [DashboardController::class, 'requests'])->name('dashboard.requests');
 Route::get($dash . '/credentials',   [DashboardController::class, 'credentials'])->name('dashboard.credentials');
 Route::get($dash . '/request/{id}',  [DashboardController::class, 'showRequest'])->name('dashboard.show-request');
+Route::get($dash . '/canaries',      [DashboardController::class, 'canaries'])->name('dashboard.canaries');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Meta / discovery (robots, sitemap, crossdomain)
@@ -132,6 +133,11 @@ Route::any('/api/{any}',      [HoneypotController::class, 'catchAll'])->where('a
 Route::get('/elmah.axd',         [HoneypotController::class, 'dotnetProbe']);
 Route::get('/elmah.axd/{any}',   [HoneypotController::class, 'dotnetProbe'])->where('any', '.*');
 Route::get('/trace.axd',         [HoneypotController::class, 'dotnetProbe']);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Canary token trigger endpoint
+// ─────────────────────────────────────────────────────────────────────────────
+Route::any('/canary/{token}', [HoneypotController::class, 'canary']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Catch-all — MUST remain last
