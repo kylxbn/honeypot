@@ -49,6 +49,7 @@
           <td class="px-3 py-2 text-slate-500 whitespace-nowrap" title="{{ $r->created_at }}">{{ $r->created_at->format('m-d H:i:s') }}</td>
           <td class="px-3 py-2 font-mono">
             <a href="{{ $base }}/requests?ip={{ $r->ip_address }}" class="text-blue-400 hover:text-blue-300">{{ $r->ip_address }}</a>
+            <abbr title="{{ $r->country_name ?? '-' }}">{{ $r->country_code ?? '-' }}</abbr>
           </td>
           <td class="px-3 py-2">
             <span class="px-1.5 py-0.5 rounded text-[10px] font-bold {{ $r->method==='GET'?'bg-blue-800 text-blue-200':($r->method==='POST'?'bg-green-800 text-green-200':'bg-slate-600 text-slate-200') }}">{{ $r->method }}</span>
