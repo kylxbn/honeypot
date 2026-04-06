@@ -15,8 +15,12 @@ class LogHoneypotRequest
         $path = $request->path();
         $fullPath = '/' . $path;
 
-        // Skip internal paths
-        foreach (config('honeypot.skip_paths', []) as $skip) {
+        // Skip dashboard and internal paths
+        $skipPaths = array_merge(
+            config('honeypot.skip_paths', []),
+            [config('honeypot.dashboard_path')]
+        );
+        foreach ($skipPaths as $skip) {
             if ($fullPath === $skip || str_starts_with($fullPath, $skip)) {
                 return $next($request);
             }
